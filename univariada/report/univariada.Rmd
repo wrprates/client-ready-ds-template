@@ -1,0 +1,361 @@
+---
+title: "*Turnover* Voluntário: Análise Exploratória Univariada (Qualidade dos Dados)"
+---
+
+```{r setup, include=FALSE, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+# Remove scientific notation
+options(scipen=999, warn = -1)
+
+# Ler os dados
+univ <- readRDS(paste0(data_path, "/outputs/univariada.rds"))
+
+```
+
+<!-- NÃO EXCLUIR. Carregar gráficos inline `r sparkline(rnorm(1))`. -->
+___
+
+**Atenção, este documento é uma versão de *template* usando dados hipotéticos que foram extraídos de base pública[^1].**
+
+___
+
+
+# Sumário Executivo
+
+<div class="executive_summary">
+
+Análise exploratória univariada é uma etapa essencial em um processo de análise de dados e consiste basicamente em, para cada uma das variáveis individualmente:
+
+* Classificar a variável quanto a seu tipo 
+    * Categóricas: nominal ou ordinal
+    * Numéricas: discreta ou contínua
+    * Data: contém data ou data/hora
+    * Caracter: texto ou ID.
+* Obter tabelas, gráficos e/ou medidas que resumam a variável
+    * Dados faltantes e dados repetidos
+    * Medidas de posição central: média, mediana
+    * Medidas de variação: amplitude, desvio padrão
+    * Medidas de posição relativa: quartis.
+    
+É por meio da análise exploratória univariada que são percebidos pontos importantes acerca da **qualidade dos dados**. É uma etapa realizada nas fases iniciais de uma análise de dados, mas que tem impacto em todo o processo, pois fornece uma visão geral de quais variáveis são mais críticas e devem ser utilizadas com cuidado nas etapas seguintes de análise (análise exploratória bivariada, testes de hipóteses e *machine learning*).
+
+## Key Findings {.unnumbered}
+    
+Para a base de dados em análise, as principais conclusões foram:
+
+* Não existem variáveis do tipo "data", o que impede que sejam feitos alguns cálculos, como tempo que o colaborador esta no mesmo grade (isso pode ser um motivo para o mesmo continuar ou deixar a empresa).
+
+* A variável `horas_contratadas` não tem variação nos valores, ou seja, os valores apresentados na base de dados são constantes. O que se pode concluir é que todos os colaboradores tem a mesma carga horária.
+
+* A variável `hora_extra` apresenta apenas dois valores ("Yes" ou "No"), sendo indicado que para este tipo de caso, tenha uma variável que contabilize as horas extras efetuadas, pois o decisor de colaborador deixar ou continuar na empresa pode ser a partir de uma determinada quantidade de horas extras por mês. Saber este valor pode ajudar na gestão do turnover voluntário. 
+
+* No caso da `performance` todos os colaboradores estão com notas 3 (Ótimo) ou 4 (Excelente), o que pode ser um problema para a gestão de consequências dado que dificulta a diferenciação entre os colaboradores. Isso pode sugerir a necessidade de melhorias no processo de avaliação de desempenho.  
+
+* Não é possível determinar a quantidade de viagens por cada colaborador, sendo apresentado na base de dados as informações de forma categórica. O ideal é que exista um campo com a quantidade de viagens por mês, pois o decisor pode se dar a partir de uma quantidade de viagens.
+
+* Por fim, não existem dados históricos dos colaboradores, apenas um *Snapshot* (registro instantâneo) das informações.
+
+Perceba a importância das conclusões acima. A partir da análise exploratória univariada é possível validar se os dados disponibilizados condizem com a realidade de gestão de pessoas da empresa ou se problemas nos processos internos de RH estão produzindo informações que não contribuem para a abordagem de *people analytics*.
+
+<div style="background:#f5f5f5; padding:20px; margin: 10px;">
+
+Por exemplo, a conclusão sobre a variável `performance` está correta ou os dados foram selecionados **de modo acidental** com algum filtro? Para este exemplo, descobrir a causa raiz do "problema" contribui para a velocidade da entrega, pois os ajustes na extração de dados são realizados no início do projeto, ou seja, antes de realizar as análises de hipóteses e modelo preditivo. 
+
+Outro exemplo que para esta base de dados não foi encontrado, mas que geralmente ocorre em RH são as datas de entrada e saída de uma posição ou qualquer outro tipo de data. Isso acontece em função do time responsável pelo processo de cadastro nos sistemas usar datas generalistas (`9/9/9999`) para ganhar velocidade e atender ao SLA. Se este fosse o caso, a análise exploratória univariada permitiria o RH ter uma métrica (uma simples proporção de casos com datas generalistas) para acompanhar e negociar melhorias com seus fornecedores internos. 
+
+</div>
+
+No decorrer deste relatório você entenderá como a análise exploratória univariada é conduzida. 
+
+    
+</div>
+  
+
+# Dimensões dos Arquivos de Dados
+
+É usual que em um projeto de análise de dados, diversas fontes de dados sejam utilizadas. Essa parte da análise foca em mostrar pontos importantes sobre cada arquivo disponibilizado, apresentando informações como a quantidade de variáveis (colunas) e de linhas.
+
+Assim, temos uma forma de avaliar se os diversos dados recebidos (vários arquivos) estão de acordo com o esperado pelo cliente. Por exemplo, sabe-se que determinado arquivo com informações pessoais dos colaboradores é o que deveria ter a maior quantidade de linhas, mas a partir da análise exploratória univariada verifica-se que não é isto que ocorre. Assim, antes mesmo de continuar com outras análises já conseguimos identificar o problema.
+
+Segue tabela com resumo das dimensões dos arquivos de dados disponibilizados:
+
+```{r}
+univ$dimensoes %>% 
+ dplyr::arrange(desc(linhas)) %>% 
+  dplyr::rename(
+    Arquivo = arquivo,
+    Linhas = linhas,
+    Colunas = colunas
+  ) %>% 
+  knitr::kable(format = "html",
+               caption = "Dimensões dos arquivos.",
+               format.args = list(big.mark = '.', decimal.mark = ",")
+               ) %>%
+    kableExtra::kable_styling(full_width = F, font_size = 15) %>%
+  column_spec(1, bold = T, border_right = T) 
+```
+
+# Variáveis do Tipo Data
+
+As variáveis do tipo data precisam ser avaliadas de forma específica, pois carregam temporalidade. Dependendo da origem da data, a verificação se existem diversas datas repetidas pode sugerir algum problema com o sistema/processo responsável pelo preenchimento da informação.
+
+Um exemplo é a data de admissão de um colaborador que por default o sistema pode adicionar **9/9/9999** que não faz sentido para a análise. Isso pode ocorrer por uma falha no processo e o resultado da análise exploratória univariada pode ser adicionar verificações no processo de forma que a informação seja confiável.
+
+**Nos dados recebidos não há campos do tipo data e por isso não apresentamos o resultado da análise exploratória univariada para este tipo de dado.**
+
+# Variáveis Numéricas
+
+Na análise exploratória univariada das variáveis numéricas são observados pontos como média, mediana, quartis e dispersões (desvio padrão e amplitude).
+
+Foram analisadas <b>`r nrow(univ$numericas)`</b> variáveis numéricas, pertencentes a `r length(unique(univ$numericas$Arquivo))` arquivos de dados. Existem `r 0 + nrow(univ$numericas) - length(unique(univ$numericas$Variavel))` variáveis com nome igual a de pelo menos mais uma variável. 
+
+## Dados Faltantes para Variáveis Numéricas
+
+```{r}
+univ$num_faltantes <- 
+  univ$numericas %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(Variavel, "Faltante (%)") %>%
+  dplyr::filter(c(`Faltante (%)`) > 0) %>% nrow
+```
+
+
+De todas as `r univ$numerica %>% nrow` variáveis numéricas, <b> `r univ$num_faltantes` possuem dados faltantes</b>, representando <b>`r round(100*(univ$num_faltantes)/(univ$numerica %>% nrow),2)`% do total de variáveis numéricas</b>.
+
+<div style = "overflow-x: auto;"> 
+```{r}
+univ$numericas %>% ungroup %>% 
+  dplyr::mutate_if(is.numeric, round, 2) %>% 
+  dplyr::select("Variavel" ,"Arquivo", "Faltante", "Faltante (%)") %>% 
+  #filter(c(`Faltante (%)`) > 0) %>% 
+  dplyr::arrange(desc(`Faltante (%)`)) %>% 
+  knitr::kable(format = "html",
+               caption = "Análise exploratória univariada das variáveis numéricas",
+               format.args = list(big.mark = '.', decimal.mark = ",")
+               ) %>%
+  kableExtra::kable_styling(full_width = F, font_size = 15) %>%
+    column_spec(1, bold = T, border_right = T)
+```
+</div>
+
+## Características das Variáveis Numéricas
+
+<div style = "overflow-x: auto;"> 
+
+```{r carunivnumericas}
+univ$numericas %>%
+  dplyr::group_by(Variavel) %>% 
+  dplyr::mutate(distribuicao = 
+               sparkline::spk_chr(
+                  sparkline_data = c(bp1, bp2, bp3, bp4, bp5),
+                 values = c(bp1, bp2, bp3, bp4, bp5), #Para incluir outliers: bp_l_out, bp_r_out
+                 #val,
+                 type = 'box',
+                 tooltipFormat = '{{field:fields}} {{value}}',
+                 tooltipFormatFieldlist = c('lw', 'lq', 'med', 'uq', 'rw'),
+                 tooltipFormatFieldlistKey = c('field'),
+                 tooltipValueLookups = htmlwidgets::JS("{fields: {med: 'Mediana', lq: 'Primeiro Quartil', uq:'Terceiro Quartil', lw: 'Limite Inferior', rw: 'Limite Superior'}}"),
+                 raw = TRUE,
+                 showOutliers = TRUE,
+                 lineColor = aux$ey_colors[2],
+                 boxLineColor =  aux$ey_colors[2],
+                 boxFillColor =  aux$ey_colors[1],
+                 whiskerColor =  aux$ey_colors[2],
+                 outlierLineColor =  aux$ey_colors[2],
+                 medianColor = aux$ey_colors[3]
+                 )
+                  
+                ) %>% 
+  dplyr::select( -bp1, -bp2, -bp3, -bp4, -bp5)  %>%  #  -bp_r_out,-bp_l_out
+  dplyr::ungroup() %>% 
+  dplyr::mutate_if(is.numeric, round, 2) %>% 
+  dplyr::select(-c("Faltante", "Faltante (%)", "25%", "75%", "Amplitude"), "Mínimo" = `0%`, "Média" = Media, "Mediana" = `50%`, "Máximo" = `100%`, "Desv. Pad." = `Desvio Padrão`, "Distribuição" = distribuicao) %>%  # "Media",  "Desvio Padrão", "Amplitude" %>%
+   knitr::kable(format = "html",
+                align = rep('l', 8),
+               escape = F,
+               caption = "Análise exploratória univariada das variáveis numéricas",
+               format.args = list(big.mark = '.', decimal.mark = ",")
+               ) %>%
+    kableExtra::kable_styling(full_width = F, font_size = 15) %>%
+    column_spec(1, bold = T, border_right = T)
+```
+
+</div>
+
+### Gráficos das Variáveis Numéricas {.unnumbered}
+
+A seguir são apresentados os histogramas (gráficos que mostram a distribuição dos dados) de cada uma das variáveis numéricas analisadas.
+
+### {.tabset .tabset-fade .tabset-pills .unnumbered}
+
+#### Densidade{.unnumbered}
+
+```{r}
+univ$chart_grid_density 
+
+```
+
+#### *Box-plot* {.unnumbered}
+
+Para criar os boxplots a opção de manter os *outliers* pode ser `TRUE` (manter) or `FALSE` (excluir). Neste caso foi escolhida <code>`r aux$box_plot_outliers`</code>.
+
+
+```{r}
+univ$chart_grid_boxplot
+
+```
+
+
+### {.unnumbered}
+
+
+
+# Variáveis Categóricas 
+
+As variáveis categóricas são aquelas que definem qualitativamente as caraterísticas dos dados. Estas variáveis apresentam níveis finitos (também chamados de *labels* ou classes).
+
+## Dados Faltantes nas Variáveis Categóricas
+
+Como dado faltante para as variáveis categóricas foi assumido fator igual a `NA`. Todas as células vazias nos arquivos de dados (Excel, csv, etc) são classificadas dessa forma no momento da higienização dos dados. Células que apresentam mensagens de erro de cálculo do Excel também são tratadas como `NA`. 
+
+Segue detalhamento dos dados faltantes nas variáveis categóricas:
+
+<div style = "overflow-x: auto;"> 
+```{r}
+univ$categoricas %>% #sample_n(10000) %>%
+  dplyr::filter(is.na(Fator)) %>%
+  dplyr::group_by(Variavel) %>%
+  dplyr::select(-Proporcao) %>%
+  dplyr::left_join(univ$dimensoes %>% dplyr::select(arquivo, linhas), by = c("Arquivo" = "arquivo") ) %>%
+  dplyr::mutate("Proporção do Arquivo (%)" = round(100*N/linhas,2)  ) %>%
+  dplyr::select(Variavel, "Linhas faltantes" = N, "Linhas totais" = linhas, dplyr::everything()) %>%
+  dplyr::arrange(desc(`Proporção do Arquivo (%)`)) %>%
+  dplyr::select(-Fator) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate_if(is.character, as.factor) %>%
+  DT::datatable(
+    rownames = FALSE,
+    style = "bootstrap",
+    width = "95%",
+    filter = 'top',
+    options = list(language =  dt_translations("pt")
+    )
+    )
+```
+</div>
+
+
+## Variáveis Categóricas
+
+Veja a lista de variáveis categóricas e suas principais características:
+
+<!-- PERMITIR BAIXAR O EXCEL DE univ$categoricas  -->
+
+<div style = "overflow-x: auto;"> 
+```{r}
+# DT::datatable(
+#   univ$categoricas %>% 
+#    group_by(Variavel) %>% 
+#     arrange(desc(N)) %>%
+#     dplyr::summarise(
+#       "Arquivos que contém a variável" = paste0(unique(Arquivo), collapse = " | "),
+#       "Qtde de níveis" = n(),
+#       "Nível mais frequente" = dplyr::first(Fator, N),
+#       "Nível menos frequente" = dplyr::last(Fator, N), 
+#        "Distribuição" =
+#       spk_chr(
+#        sparkline_data=  N, Fator,
+#         type = 'bar',
+#         borderColor = aux$ey_colors[2], 
+#         borderWidth = 1, 
+#         fillColor = "#ffffff",
+#         lineColor = "#ffffff",
+#         sliceColors = c (aux$ey_colors[1], aux$ey_colors[2]))) %>%
+#     dplyr::ungroup() %>%
+#     arrange(desc(`Qtde de níveis`)),
+#   rownames = FALSE,
+#   escape = FALSE,
+#   style = "bootstrap",
+#   width = "95%",
+#   filter = 'top',
+#   options = list(language =  dt_translations("pt"))
+#   ) 
+
+univ$categoricas %>% 
+   dplyr::group_by(Variavel) %>% 
+    dplyr::arrange(desc(N)) %>%
+    dplyr::summarise(
+      "Arquivos que contém a variável" = paste0(unique(Arquivo), collapse = " | "),
+      "Qtde de níveis" = dplyr::n(),
+      # "Nível mais frequente" = dplyr::first(Fator, N, order_by = dplyr::desc(N)),
+      # "Nível menos frequente" = dplyr::last(Fator, N, order_by = dplyr::desc(N)),
+      "Nível mais frequente" = dplyr::first(Fator, order_by = dplyr::desc(N)),
+      "Nível menos frequente" = dplyr::last(Fator, order_by = dplyr::desc(N)),
+
+       "Distribuição" = sparkline::spk_chr(
+      sparkline_data = c(Fator, N),
+       values = N,
+        type = 'bar',
+        tooltipFormatter = spk_tool(c(Fator)),
+        borderColor = aux$ey_colors[2],
+        borderWidth = 1,
+        fillColor = "#ffffff",
+        lineColor = "#ffffff",
+        sliceColors = c(aux$ey_colors))
+    ) %>%
+   knitr::kable(format = "html",
+               escape = F,
+                align = rep('l', 6),
+               caption = "Análise exploratória univariada das variáveis categóricas",
+               format.args = list(big.mark = '.', decimal.mark = ",")
+               ) %>%
+    kableExtra::kable_styling(full_width = F, font_size = 15) %>%
+    column_spec(1, bold = T, border_right = T)
+
+```
+</div>
+
+
+### Gráficos das Variáveis Categóricas {.unnumbered}
+
+```{r}
+univ$chart_grid_hist_categoricas
+```
+
+As variáveis que possuem mais de `r aux$many_levels_n` níveis não foram mostradas nos gráficos acima. Estão nesta condição as seguintes variáveis: `r paste(aux$many_levels_cols)`.
+
+
+# Variáveis Chave (ID)
+
+Variáveis chave servem para realizar relações entre as tabelas, também chamadas de “ID”, por serem variáveis de “identificação”.
+
+As variáveis chave não são consideradas nas análises, pois a função delas é viabilizar a conexão entre as tabelas de dados.
+
+Veja os detalhes mais relevantes dessas variáveis:
+
+
+<div style = "overflow-x: auto;"> 
+```{r}
+DT::datatable(
+  univ$id,
+  rownames = FALSE,
+  style = "bootstrap",
+  width = "95%",
+  options = list(language =  dt_translations("pt")
+  )
+  )
+```
+</div>
+
+# Variáveis Texto
+
+Variáveis do tipo texto são aquelas que não possuem um padrão no preenchimento. Pode representar descrições em campos abertos, nomes de cursos realizados, experiências profissionais, respostas em pesquisas, entre outros.
+
+**Nos dados recebidos não há campos do tipo texto e por isso não apresentamos o resultado da análise exploratória univariada para este tipo de dado.**
+
+
+## Notas {.unnumbered}
+
+[^1]: A base de dados utilizada neste relatório possui dados fictícios criados por cientistas de dados da IBM. A base é pública e está disponível na plataforma *Kaggle*, neste [link](https://www.kaggle.com/pavansubhasht/ibm-hr-analytics-attrition-dataset).
+

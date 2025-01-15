@@ -1,0 +1,1239 @@
+---
+title: '*Turnover* Voluntário: Testes de Hipóteses Estatísticas'
+---
+
+```{r setup, include=FALSE, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+# Remover notação científica
+options(scipen=999, warn = -1)
+```
+
+<!-- NÃO EXCLUIR. Carregar gráficos inline `r sparkline(rnorm(1))`. -->
+___
+
+**Atenção, este documento é uma versão de *template* usando dados hipotéticos que foram extraídos de base pública[^1].**
+
+___
+
+
+# Sumário Executivo
+
+<div class="executive_summary">
+
+O teste de hipóteses é uma etapa onde são realizadas análises estatísticas com o objetivo de verificar por meio de dados algumas suposições sobre os motivos pelos quais um colaborador toma a decisão de se desligar voluntariamente da empresa. 
+
+O processo de definição das hipóteses é feito através de uma sessão de *Design Thinking* conduzida pela equipe de Data Science com participação de colaboradores-chave sugeridos pelo cliente, incluindo o RH e também colaboradores de áreas de interesse (distribuídos em diversos níveis hierárquicos). 
+
+A priorização das hipóteses é realizada pelo RH em função de serem levantadas diversas hipóteses nas sessões de *Design Thinking* e dada a restrição de tempo disponível para o projeto. As hipóteses que não são analisadas ficam como **_backlog_**, podendo servir de ponto de partida para projetos futuros de *people analytics*. 
+
+Na tabela a seguir apresentamos, para **fins explicativos**, algumas **razões** que podem influenciar o pedido de demissão voluntária de um colaborador.
+
+<table class="table table-condensed">
+  <tr>
+    <th><center><strong>Razões para sair</strong></center></th>
+    <th><center><strong>Possíveis fatores</strong></center></th>
+  </tr>
+  <tr>
+    <td rowspan="4">Aspectos pessoais que podem motivar mudança de carreira</td>
+    <td> Idade, *background* educacional, área de formação,  tipo de contrato de trabalho (permanente, contrato temporário).</td>
+  </tr>
+  <tr>
+    <td> Departamento, anos totais de trabalho, anos na empresa, quantidade de promoções, intervalo de tempo entre as promoções, tempo desde a última promoção.</td>
+  </tr>
+  <tr>
+    <td>Remuneração bruta, salário normalizado (por hora de trabalho, por exemplo), posição na faixa salarial na companhia, posição na faixa salarial em relação ao mercado, bônus, aumento percentual no bônus por ano, benefícios anuais totais.</td>
+  </tr>
+  <tr>
+    <td> Avaliação de *performance*, *feedbacks* de líderes</td>
+  </tr>
+  <tr>
+    <td rowspan="4">Ambiente</td>
+    <td> Índice de *turnover* da área/departamento, *turnover* do líder direto</td>
+  </tr>
+  <tr>
+    <td> Receita da companhia, receita do departamento, lucro associado ao departamento, número de vezes em que o departamento passou por reestruturações.</td>
+  </tr>
+  <tr>
+    <td> Quantidade de vezes que houve mudanças no gestor direto e no departamento.</td>
+  </tr>
+    <tr>
+    <td> Número de pessoas no departamento, posições das pessoas do departamento.</td>
+  </tr>
+  <tr>
+    <td>Localização/mobilidade</td>
+    <td>Distância entre residência e local de trabalho, frequência de necessidade de viagens a trabalho.</td>
+  </tr>
+  <tr>
+    <td>Razões familiares</td>
+    <td>Estado civil, número de filhos.</td>
+  </tr>
+  <tr>
+    <td> Pressões no trabalho</td>
+    <td> Média de horas de trabalho por dia/semana/mês, média de horas extras, número de e-mails (ou *calls*), horário do turno de trabalho, absenteísmo (número de faltas no mês, trimestre, ano).</td>
+  </tr>
+  <tr>
+    <td> Aspectos legais</td>
+    <td> Comportamento ilegal, advertências, pendenciais judiciais, ações trabalhistas.</td>
+  </tr>
+</table>
+
+
+## Hipóteses Testadas {.unnumbered} 
+
+Para o conjunto de dados hipotéticos usados, as seguintes hipóteses foram testadas:
+
+| Grupo    | Núm.     | Hipótese                                    | Validada? |
+|:--------:|:--------:|:---------------------------------------------|:----------:|
+| Perfil Demográfico | [1](#h1) | Perfil demográfico/profissional dos colaboradores que se desligam voluntariamente | - |
+| Análise de Sobrevida | [2](#h2) | Análise de risco dos colaboradores que se desligam voluntariamente  | - |
+| Remuneração | [3](#h3) | Colaboradores que se desligam voluntariamente estão pior posicionados dentro da faixa salarial | Sim |
+| Carreira  | [4](#h4) | Colaboradores com maior tempo no cargo estão menos inclinados a pedir demissão | Sim |
+| Carreira  | [5](#h5) | Colaboradores que recebem menor percentual na gestão de consequências (promoção) estão mais inclinados a pedir demissão  | Não |
+| Equilíbrio (vida pessoal e profissional)   | [6](#h6) | Colaboradores que fazem maior quantidade de horas extras tendem a pedir demissão  | Sim |
+| Equilíbrio (vida pessoal e profissional)   | [7](#h7) | Há um maior índice de *turnover* voluntário em colaboradores cuja frequência de viagem a trabalho é maior | Sim |
+
+<!-- | Carreira  | [7](#h7) | Colaboradores com menor tempo na empresa, tem maior índice de *turnover* voluntário  | Sim | -->
+<!-- | Carreira  | [8](#h8) | Colaboradores com menor quantidade de anos de experiência, tem maior índice de *turnover* voluntário | Sim | -->
+<!-- | Remuneração  | [9](#h9) | Colaboradores que não tem *Stock Options* tem maior índice de *turnover* voluntário | Sim | -->
+
+
+## Key Findings {.unnumbered}
+
+No decorrer deste documento maiores detalhes serão apresentados, mas em linhas gerais as principais conclusões agrupadas por tipo são: 
+
+* **Perfil dos colaboradores que se desligam voluntariamente**
+    * Solteiros, com idade entre 25 e 35 anos e que trabalham em torno de 5Km de distância da sua casa;
+    * Maior parte (32%) com pouco tempo de empresa (até 1 ano), mas também há casos com 5 a 10 anos de empresa (24%);
+        * Isso sugere que pode haver um problema de contratação ou gestão de consequências.
+    * Não podemos dizer que existe um gênero que, proporcionalmente, pede demissão com maior frequência.
+
+* **Carreira:**
+    * O tempo médio na posição **é estatisticamente menor** para colaboradores que se desligaram voluntariamente em comparação com colaboradores ativos;
+    * O **turnover voluntário foi superior no grupo de colaboradores que receberam um menor percentual de gestão de consequência** em comparação com colaboradores com maior percentual.
+    
+* **Remuneração:**
+    * A posição na faixa **é estatisticamente menor** para colaboradores que se desligaram voluntariamente em comparação com os colaboradores ativos.
+
+* **Equilíbrio (vida pessoal e profissional):**
+    * A proporção de turnover voluntário é **estatisticamente maior** no grupo de colaboradores que fizeram hora extra no período analisado, assim como o risco de desligamentos derivado na análise de sobrevida;
+    * O turnover voluntário foi **estatisticamente superior** para colaboradores com **maior frequência de viagem**, assim como o risco derivado da análise de sobrevida.
+
+
+</div>
+
+# *Status* dos Colaboradores Analisados
+
+Nesta seção apresentamos a distribuição dos colaboradores para o período de análise. O objetivo é avaliar o perfil da amostra de dados segundo o status do colaborador (ativo e desligado voluntariamente).
+
+```{r turnovergeral}
+aux$geral_turnover %>% 
+   dplyr::ungroup() %>% 
+   dplyr::rename(
+    "Qtde. de colaboradores" = n,
+	  "Proporção" = proporcao
+  ) %>% 
+   knitr::kable(format = "html",
+                escape = FALSE, 
+                align = rep('c', 4),
+                caption = "Quantidade e distribuição dos colaboradores: 0 = Ativo; 1 = Desligado Voluntariamente") %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T) 
+```
+
+Como é possível observar na tabela \@ref(tab:turnovergeral), no período analisado houve um turnover voluntário de `r aux$geral_turnover$proporcao[2]`, totalizando  `r aux$geral_turnover$n[2]`colaboradores. 
+
+# Testes das Hipóteses {#hipoteses}
+
+A lógica utilizada para testar as hipóteses é:
+
+- **Primeiro**: contextualizar a hipótese a ser testada. 
+
+- **Segundo**: fazer uso de <a href="https://pier-shared.gitlab.io/pier_apendice/hipoteses.html#teste_hipoteses" target="_blank">testes estatísticos</a> para validar ou confrontar a hipótese. 
+
+- **Terceiro**: descrever as conclusões sobre a hipótese testada.
+
+- **Quarto**: apresentar gráficos e/ou dados que ajudem no entendimento dos resultados apresentados pelos testes estatísticos.
+
+Mais detalhes sobre os testes estatísticos aqui realizados podem ser visualizados no <a href="https://pier-shared.gitlab.io/pier_apendice/hipoteses.html" target="_blank">apêndice</a>. 
+
+### H. 1 - Perfil demográfico/profissional dos colaboradores que se desligam voluntariamente {#h1 .unnumbered}
+
+> **Análise**: Obter o perfil demográfico e profissional dos colaboradores que se desligam voluntariamente. <br/>
+**Premissa**: Avaliação usando todos os colaboradores que se desligaram voluntariamente no período.
+
+O objetivo desta hipótese é avaliar se existe um perfil demográfico e profissional dos colaboradores que tomaram a decisão de se desligarem da empresa. Para fins de comparação, também fazemos a mesma análise para os colaboradores que estão ativos.
+
+Neste sentido, os gráficos abaixo apresentam variáveis demográficas e profissionais associadas a cada grupo (*turnover* voluntário e ativos) durante o período analisado. Os gráficos representam as distribuições das variáveis numéricas e a contagem das classes das variáveis categóricas. Apesar de não relatarem resultados de testes estatísticos, os gráficos permitem ter uma ideia acerca do perfil dos colaboradores em cada grupo.
+
+#### {.tabset .tabset-fade .tabset-pills .unnumbered}
+
+##### Turnover Voluntário {.unnumbered}
+
+```{r}
+aux$h1$chart_perfil_turn
+```
+
+##### Ativos {.unnumbered}
+
+```{r}
+aux$h1$chart_perfil_ativos
+```
+
+####  {.unnumbered}
+
+A análise dos gráficos permite obter as seguintes conclusões:
+
+* **Gênero:** 
+    * A empresa possui uma **maior proporção de homens** dentre os colaboradores **ativos** (59% de homens contra 41% de mulheres):
+        * Isso representa 728 homens e 505 mulheres;
+    * Do total de desligados voluntariamente no período (`r aux$geral_turnover$n[2]`), 63% são homens e 37% são mulheres
+        * Isso representa 150 homens e 87 mulheres;
+        * Em relação aos colaboradores ativos, em torno de 20% dos homens pediram demissão no período, enquanto que aproximadamente 17% das mulheres fizeram o mesmo;
+    * **Assim, não podemos dizer que existe um gênero que, proporcionalmente, pede demissão com maior frequência.**
+    
+* **Estado Civil:** 
+    * Existe **maior incidência de pedidos de demissão de colaboradores solteiros:** 
+        * 51% do turnover voluntário são de colaboradores solteiros;
+        * Dos solteiros, 350 são colaboradores ativos e 120 desligaram-se voluntariamente;
+    * Dos colaboradores **ativos**, uma maioria se declarada **casado**, com equilíbrio entre os que declaram-se **divorciados** e **solteiros**.
+
+* **Idade:**
+    * Colaboradores **ativos** estão distribuídos nas idades, sendo que o não existem colaboradores com mais de 55 anos.
+    * Já para os colaboradores **desligados voluntariamente** o pico de idade se encontra entre 25 a 35 anos.
+
+* **Escolaridade**
+    * Colaboradores com ensino superior são os que mais pedem para se desligar da empresa. Contudo, proporcionalmente não há diferenças em relação aos demais níveis de escolaridade;
+    * Isso significa que, em todos os níveis de escolaridade da empresa, há proporções semelhantes de colaboradores se desligando voluntariamente. 
+
+* **Distância de casa até o trabalho**
+    * A maior proporção dos colaboradores que se desligam voluntariamente (37%) trabalha a uma distância de 5 Km de sua casa enquanto que os colaboradores ativos (30%) moram mais próximos do trabalho (em torno de 2 Km).
+    
+* **Quantidade de empresas que trabalhou** 
+    * Não existe diferenciação entre colaboradores ativos e os que se desligaram voluntariamente;
+    * Aparentemente, trata-se de um perfil com poucas (até 3) mudanças de empresas;
+        * Com a data de nascimento poderíamos avaliar se é comum em todas as gerações.
+
+* **Tempo na empresa**
+    * Maior incidência de turnover voluntário para colaboradores com até 1 ano de empresa (32%) e de 5 a 10 anos (24%)
+        * Isso indica que pode ser um problema de contratação ou gestão de consequências, mas é necessário avaliar
+    * Dentre os colaboradores ativos predominam os que tem mais de 3 anos de empresa.
+    
+#### Correlações entre as Variáveis {.unnumbered}
+    
+De forma complementar aos histogramas, que mostram como é a distribuição de uma única variável por gráfico, para compreender melhor o perfil dos colaboradores ativos e desligados cabe também uma análise de correlação entre as variáveis.
+
+A análise de correlação permite identificar a força existente na relação entre duas variáveis. O chamado coeficiente de correlação é calculado apenas entre variáveis contínuas (numéricas). Porém, é possível calcular também um coeficiente de associação entre as variáveis categóricas.
+
+A seguir são apresentados gráficos com os coeficientes calculados. Para a correlação das variáveis numéricas foi utilizado o coeficiente de correlação de postos de [Spearman](https://pt.wikipedia.org/wiki/Coeficiente_de_correla%C3%A7%C3%A3o_de_postos_de_Spearman), que oscila de -1 (correlação perfeita negativa) até +1 (correlação perfeita positiva). Já para a associação entre as variáveis categóricas foi utilizado o coeficiente de contingência [Cramer's V](https://en.wikipedia.org/wiki/Cram%C3%A9r%27s_V), que oscila de 0 (sem associação) até +1 (perfeita associação).
+    
+##### {.tabset .tabset-fade .tabset-pills .unnumbered}
+
+###### Variáveis Numéricas {.unnumbered}
+
+Coeficiente de correlação das variáveis numéricas acima de `r round(aux$h1$gt_pos_cor, 2)` e menores que  `r round(aux$h1$lt_neg_cor, 2)`.
+
+####### Colaboradores Ativos {.unnumbered}
+
+```{r}
+aux$h1$chart_cor_num_ativos
+```
+
+####### Colaboradores Desligados {.unnumbered}
+
+```{r}
+aux$h1$chart_cor_num_deslig
+```
+
+
+###### Variáveis Categóricas {.unnumbered}
+
+Coeficiente de associação Cramer's V das variáveis categóricas acima de `r round(aux$h1$gt_pos_cor, 2)`.
+
+
+####### Colaboradores Ativos {.unnumbered}
+
+```{r}
+aux$h1$chart_cramerv_ativos
+```
+
+
+####### Colaboradores Desligados {.unnumbered}
+
+```{r}
+aux$h1$chart_cramerv_deslig
+```
+
+##### {.unnumbered}
+
+
+
+    
+[Voltar para a lista de hipóteses.](#hipoteses)
+
+### H. 2 - Analise de risco dos colaboradores se desligam voluntariamente  {#h2 .unnumbered}
+
+> **Análise**: Analisar o risco de desligamento voluntário dos colaboradores, baseado nas variáveis de perfil demográfico e profissional. <br/>
+**Premissa**: As categorias de com base das variáveis foram extraídos na etapa de *design thinking*
+
+O objetivo desta etapa do relatório é desenvolver um modelo para **análise de sobrevida do _turnover_ voluntário dos colaboradores**. Uma análise de sobrevida, em termos gerais, é uma técnica utilizada em situações onde o interesse consiste em modelar o **tempo até a ocorrência de um evento**, sendo que a ocorrência desse evento não é constante ao longo do tempo. Dessa forma, utilizar estatísticas descritivas como média e desvio padrão tornam-se inadequados. Neste caso, o objetivo é mensurar **o risco de um funcionário se desligar voluntariamente da empresa**. 
+
+Existem inúmeras formas de se estimar uma função de sobrevida, Neste relatório adotou-se a  a **Regressão de Cox** ou **Modelo de Riscos Proporcionais**[^2], um dos métodos mais frequentemente utilizados. Para mais informações sobre o método e seus pressupostos, consulte o apêndice disponível neste <a href="https://pier-shared.gitlab.io/pier_apendice/hipoteses.html#analise_sobrevida" target="_blank">*link*</a>.
+
+A análise de sobrevida pode utilizar como covariáveis para o modelo quaisquer características pessoais ou profissionais, desde que se encaixem nos pressupostos gerais deste modelo de regressão. Isso permite avaliar a sobrevida dos funcionários de acordo com características como **cargo** e **nível educacional**, por exemplo. Assim, em conjunto com outras investigações, a análise de sobrevida pode se tornar um elemento importante para a tomada de decisão. 
+
+[^2]: Todos os resultados encontrados utilizando a Regressão de Cox foram testados e validados para o pressuposto de riscos proporcionais. Todos os modelos apresentados neste relatório apresentaram-se significativos nos três testes realizados de significância global do modelo (Teste de Wald; Logrank e Likelihood).
+
+#### Variáveis de Perfil Demográfico {.unnumbered}
+
+As covariáveis **Nível de Escolaridade** e **Formação** foram escolhidas para a análise de sobrevida. As tabelas para estas duas variáveis encontram-se abaixo. Nelas, é possível perceber que **não há diferença estatisticamente significante** entre o tempo de permanência da empresa nos diferentes níveis de escolaridade. Para a variável formação, observa-se que Ciências Biológicas e Medicina possuem um menor risco (estatisticamente significativo) quando comparador a formação base de análise, Grau Técnico. 
+
+##### {.tabset .tabset-fade .tabset-pills .unnumbered}
+
+###### Nível Educacional {.unnumbered}
+
+Foi utilizado como base o nível educacional de Doutorado, pois na percepção do cliente, os colaboradores com este nível de escolaridade são os que menos saem da empresa de forma voluntária, pois buscam mais a estabilidade.
+
+<center>
+<div style="overflow-x: auto; width: 90%;">
+```{r}
+rownames(survival$coef$escolaridade) <- c("Ensino Médio", "Mestrado", "Nível Superior", "Nível Técnico")
+
+survival$coef$escolaridade %>%
+knitr::kable(format = "html",
+                align = rep('c', 4),
+                digits = 2,
+                caption = "Coeficientes extraídos da Regressão. Comparador: Doutorado") %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T) 
+
+```
+</div>
+</center>
+
+###### Formação {.unnumbered}
+
+Para formação, utilizou-se como base Grau Técnico, uma vez que o cliente acredita que os colaboradores com esta formação são os que saem com maior frequência da empresa de forma voluntária. 
+
+<center>
+<div style="overflow-x: auto; width: 90%;">
+```{r}
+rownames(survival$coef$formacao) <- c("Marketing","Recursos Humanos", "Ciências Biológicas",  "Medicina", "Outras")
+
+survival$coef$formacao %>%
+knitr::kable(format = "html",
+                align = rep('c', 4),
+                digits = 2,
+                caption = "Coeficientes extraídos da Regressão. Comparador: Marketing") %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T) 
+
+```
+</div>
+</center>
+
+##### {.unnumbered}
+
+<div style="background:#f5f5f5; padding:20px; margin: 10px;">
+
+Um valor positivo dos coeficientes indica um maior risco do evento (neste caso, de desligamento voluntário do funcionário). Dessa forma, os coeficientes superiores a zero indicam um número superior de desligamentos voluntários (em outras palavras, são **fatores de risco**), enquanto os coeficientes negativos indicam menor risco (ou seja, são denominados **fatores protetivos**). 
+
+Ao elevarmos os coeficientes na exponencial (`exp_coef`) chegamos aos riscos relativos (RR ou HR) com relação ao cenário de base. Quando não há diferenças nos riscos entre dois fatores, então a razão de riscos torna-se igual a 1 $\frac{exp(\beta_1a)}{exp(\beta_1b)} = 1$ . Dessa forma, quaisquer riscos relativos superiores a 1 indicam aumento dos riscos, e vice-versa. Maiores informações sobre a análise podem ser consultadas no <a href="https://pier-shared.gitlab.io/pier_apendice/hipoteses.html#analise_sobrevida" target="_blank">apêndice</a>.
+
+É importante observar na tabela, para além dos coeficientes (`coef`) e dos riscos relativos (`exp_coef`), o p valor (`p valor`) disposto para cada um dos fatores. O  *p-valor* representa a **probabilidade de significância** estatística (métrica que vai de 0 a 1). Sendo assim um **baixo p-valor** indica **forte evidência** de que existe diferença entre os fatores analisados. O ponto de corte usual é de $p~valor = 0.05$. Neste caso, podemos perceber que o nível de escolaridade e a formação **não é estatisticamente significante** no modelo. 
+
+</div>
+
+#### Variáveis do Perfil do Colaborador na Empresa {.unnumbered}
+
+Para as variáveis do perfil do colaborador na empresa, foram analisadas as variáveis: **Cargo**, **Departamento**, **Grade**, **Hora extra** e **Frequência de viagens**. As tabelas com as informações dos coeficientes encontram-se abaixo:
+
+#### {.tabset .tabset-fade .tabset-pills .unnumbered}
+
+##### Cargo {.unnumbered}
+
+Foi utilizado como comparador o cargo de Representante de Vendas, pois na percepção do cliente, os colaboradores com este cargo são os que mais saem da empresa de forma voluntária, em virtude da quantidade de oportunidades para estes profissionais.
+
+<center>
+<div style="overflow-x: auto; width: 90%;">
+```{r}
+
+rownames(survival$coef$cargo) <- c("Representante de Cuidados de Saúde", "Recursos Humanos", "Técnico de Laboratório", "Gerente", "Diretor de Manufatura", "Diretor de Pesquisa", "Pesquisador", "Excecutivo de Vendas")
+
+survival$coef$cargo %>%
+knitr::kable(format = "html",
+                align = rep('c', 4),
+                digits = 2,
+                caption = "Coeficientes extraídos da Regressão. Comparador: Representante de Vendas") %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T) 
+
+```
+</div>
+</center>
+
+##### Departamento {.unnumbered}
+
+O departamento de Recursos Huamnos foi o escolhido para ser a base desta análise, pois a empresa acredita que os colaboradores deste departamento são os que menos se desligam de forma voluntária da empresa.
+
+<center>
+<div style="overflow-x: auto; width: 90%;">
+```{r}
+rownames(survival$coef$deptid) <- c("Pesquisa e Desenvolvimento", "Vendas")
+
+survival$coef$deptid %>%
+knitr::kable(format = "html",
+                align = rep('c', 4),
+               digits = 2,
+                caption = "Coeficientes extraídos da Regressão. Comparador: Recursos Humanos") %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T) 
+
+```
+</div>
+</center>
+
+##### Grade {.unnumbered}
+
+Foi utilizado o grade 1 como base, pois existe a crença de que a rotatividade dos colaboradores que se desligam de forma voluntária neste grade é maior.
+
+<center>
+<div style="overflow-x: auto; width: 90%;">
+```{r}
+
+survival$coef$grade %>%
+knitr::kable(format = "html",
+                align = rep('c', 4),
+                digits = 2,
+                caption = "Coeficientes extraídos da Regressão. Comparador: grade 1") %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T) 
+
+```
+</div>
+</center>
+
+
+##### Hora Extra {.unnumbered}
+
+Foi utilizado o critério de não ter realizado hora extra como base, uma vez que a percepção do cliente é de que, geralmente, os colaboradores que não fizeram hora extra não se desligam de forma voluntária, pois tem um melhor equilíbrio entre a vida pessoal e profissional.
+
+<center>
+<div style="overflow-x: auto; width: 90%;">
+```{r}
+rownames(survival$coef$hora_extra) <- c("Sim")
+
+survival$coef$hora_extra %>%
+knitr::kable(format = "html",
+                align = rep('c', 4),
+               digits = 2,
+                caption = "Coeficientes extraídos da Regressão. Comparador: Não") %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T) 
+
+```
+</div>
+</center>
+
+##### Frequência Viagens {.unnumbered}
+
+Foi utilizado como base de comparação os colaboradores que não viajam pela empresa, pois acredita-se que esses são os colaboradores que não se desligam de forma voluntária, uma vez que conseguem permanecer mais próximo de seus familiares.
+
+
+<center>
+<div style="overflow-x: auto; width: 90%;">
+```{r}
+rownames(survival$coef$freq_viagem) <- c("Viaja com frequência", "Viaja raramente")
+
+survival$coef$freq_viagem %>%
+knitr::kable(format = "html",
+                align = rep('c', 4),
+             digits = 2, 
+                caption = "Coeficientes extraídos da Regressão. Comparador: Não Viajar") %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T) 
+
+```
+</div>
+</center>
+
+##### Equilíbrio Vida Profissional {.unnumbered}
+
+Foi utilizado como base os colaboradores que responderam "Excelente" na pesquisa de clima, para a questão de equilíbrio da vida profissional e pessoal, devido à crença que esses colaboradores têm um menor índice de desligamento voluntário.
+
+<center>
+<div style="overflow-x: auto; width: 90%;">
+```{r}
+rownames(survival$coef$equilibrio_vida_profissional) <- c("Ótimo", "Baixo", "Bom")
+
+survival$coef$equilibrio_vida_profissional %>%
+knitr::kable(format = "html",
+                align = rep('c', 4),
+             digits = 2,
+                caption = "Coeficientes extraídos da Regressão. Comparador: Ótimo") %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T) 
+
+```
+</div>
+</center>
+
+
+#### {.unnumbered}
+
+A partir das tabelas podemos observar:
+
+
+* Em relação aos **cargos**, percebe-se que **todos os cargos** possuem um **menor risco** de demissão voluntária frete ao cargo de **Representante de Vendas**. 
+
+* Ao analisarmos sob a ótica da distribuição por departamentos, **não** é possível encontrar **diferenças no tempo de permanência** (*turnover* voluntário) dos colaboradores por departamento.
+
+* **Todos os _grades_**, quando comparados ao menor nível (*grade* 1), podem ser considerados **fatores protetivos** do *turnover* voluntário, ou seja, possuem um maior tempo de permanência dentro da empresa. 
+
+* **Realizar horas extras** determina um **fator de risco** para o *turnover* voluntário, com um menor tempo de empresa para os funcionários que declaram realizar horas extras. 
+
+* Com relação a **realização de viagens**, esta se demostra um **fator de risco**, tanto para os funcionários que **viajam frequentemente** tanto para os que **viajam raramente**. 
+
+* Para a variável **equilíbrio da vida profissional**, o indicador de equilíbrio *baixo* demonstrou-se com **maior risco de desligamento voluntario** quando comparado ao indicador **excelente**. Os demais níveis (Ótimo e Bom), não diferem estatisticamente do nível Excelente. 
+
+Para as análises que se demonstraram estatisticamente significativas, utilizou-se dos coeficientes dispostos acima para calcular o número de colaboradores (funcionários que não se desligaram voluntariamente) a cada ponto do tempo. A parti disso, é possível calcular a mediana do tempo da empresa (por *turnover* voluntário), bem como o tempo para atingir um determinado percentil. 
+
+Observe nos gráficos que a linha tracejada indica a variável de base de comparação, as linhas contínuas indicam os níveis que diferem estatisticamente da categoria de base. As linhas pontilhadas, por sua vez, indicam as categorias que não diferem-se da base, ou seja, que não possuem diferença de risco, quando comparadas a categoria de base. 
+
+
+#### {.tabset .tabset-fade .tabset-pills .unnumbered}
+
+##### Cargo {.unnumbered}
+
+ <br/>
+<center>
+```{r}
+
+survival$cargo
+
+```
+</center>
+
+##### Grade {.unnumbered}
+
+<br/>
+<center>
+```{r}
+
+survival$grade
+
+```
+</center>
+
+##### Horas Extras {.unnumbered}
+
+<br/>
+<center>
+```{r}
+
+survival$hrext
+
+```
+</center>
+
+##### Frequência Viagens {.unnumbered}
+
+<br/>
+<center>
+```{r}
+
+survival$viagem
+
+```
+</center>
+
+##### Equilíbrio Vida Profissional {.unnumbered}
+
+<br/>
+<center>
+```{r}
+
+survival$equil
+
+```
+</center>
+
+#### {.unnumbered}
+
+
+
+### Variáveis do Performance e Gestão da Consequência {.unnumbered}
+
+Para este grupo de variáveis, foi analisada a sobrevida de acordo com a **quantidade de treinamentos** realizados no último ano por cada colaborador, com base na comparação com os colaboradores que não realizaram nenhum treinamento. A tabela abaixo mostra os resultados:
+
+
+<center>
+<div style="overflow-x: auto; width: 100%;">
+```{r}
+
+rownames(survival$coef$treinamentos_ultimo_ano) <- c("Um a Dois", "Três a Quatro", "Mais de Cinco")
+
+survival$coef$treinamentos_ultimo_ano %>%
+knitr::kable(format = "html",
+                align = rep('c', 4),
+             digits =2,
+                caption = "Coeficientes extraídos da Regressão. Comparador: Nenhum") %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T) 
+
+```
+</div>
+</center>
+
+
+Como todos os coeficientes possuem sinais negativos (e todos os coeficientes elevados na exponencial são abaixo de zero), isso demonstra que funcionários com um maior número de treinamentos no ano anterior tem um menor risco de se desligarem voluntariamente. O gráfico abaixo permite visualizar as curvas de sobrevida em relação ao *turnover* voluntário.
+
+<br/>
+<center>
+```{r}
+
+survival$treinam
+
+```
+</center>
+
+[Voltar para a lista de hipóteses.](#hipoteses)
+
+### H. 3 - Colaboradores que se desligam voluntariamente estão pior posicionados dentro da faixa salarial {#h3 .unnumbered}
+
+ >**Análise**: Comparar a posição na faixa salarial entre colaboradores que se desligaram voluntariamente e colaboradores ativos. <br />
+**Premissa**: Avaliação usando todos os colaboradores que se desligaram voluntariamente no período. 
+ 
+Por meio do gráfico de densidade abaixo (esquerda) é possível observar que, dentre os colaboradores que se desligam voluntariamente, existe uma maior proporção de *turnover* voluntário para aqueles que estão posicionados abaixo de 92% da faixa salarial. Além disso, quando observado o gráfico de *box plot* (direita) nota-se uma pequena diferença na posição na faixa entre colaboradores ativos e os que se desligaram voluntariamente. 
+
+Ao realizar um teste estatístico é possível afirmar que a posição na faixa **é estatisticamente menor** para colaboradores com turnover voluntário do que para colaboradores ativos (com p-valor de `r round(aux$h3$teste_wilcox$p.value, 3)`), ou seja, **há relação** entre a posição na faixa e *turnover* voluntário quando comparado com colaboradores ativos. Maiores detalhes sobre os testes estatísticos realizados nesta e nas hipóteses subsequentes podem ser visualizados no  <a href="https://pier-shared.gitlab.io/pier_apendice/hipoteses.html#teste_hipoteses" target="_blank">apêncide</a>.  
+
+<div style="float: left; width: 100%;">
+<div style="float: left; width: 60%;">
+```{r}
+aux$h3$chart_density
+```
+</div>
+<div style="float: right; width: 40%;">
+```{r}
+aux$h3$chart_box_plot
+```
+</div></div> <br/>
+
+
+**Sendo assim, temos como conclusão desta hipótese:**
+
+- Colaboradores que se desligam voluntariamente estão pior posicionados dentro da faixa salarial: **validado**.
+
+
+### {.tabset .tabset-fade .tabset-pills .unnumbered}
+
+#### Dados Utilizados {.unnumbered}
+
+<div style="overflow-x: auto">
+```{r}
+DT::datatable(
+  aux$h3$df,
+  rownames = FALSE,
+  style = "bootstrap",
+  extensions = 'Buttons',
+  options = list(
+    language =  dt_translations("pt"),
+    pageLength = 5,
+    dom = 'lrtBip' , # Bt para usar Buttons; defatult lfrtip - f é o search, r não deve-se tirar
+    buttons = c('csv', 'excel')
+    ),
+  filter = list(position = 'top')
+) %>%
+  formatRound(c(3), digits = 2, interval = 3, mark = ",",
+    dec.mark = getOption("OutDec"))
+```
+
+</div>
+
+
+#### Gráficos {.unnumbered}
+
+```{r}
+profile_chart(aux$h3$df %>% dplyr::select(-emplid) %>% dplyr::mutate(turnover = as.factor(turnover)), ncol = 3)
+```
+
+
+### {.unnumbered}
+
+[Voltar para a lista de hipóteses.](#hipoteses)
+
+
+### H. 4 - Colaboradores com maior tempo no cargo estão menos inclinados a pedir demissão {#h4 .unnumbered}
+
+ >**Análise**: Comparar o tempo no cargo entre colaboradores que se desligaram voluntariamente e colaboradores ativos. <br />
+**Premissa**: Considerar tempo no último cargo para colaboradores que se desligaram e cargo atual no caso dos colaboradores ativos.
+ 
+Geralmente, no momento em que decide se desligar voluntariamente da empresa, o colaborador tem menor tempo na posição, quando comparado aos colaboradores ativos. Isso acontece porque, por algum motivo (quase sempre está relacionado com gestão, consequência, clima ou governança), o colaborador não está satisfeito com a situação na posição atual e decide abandonar a empresa. 
+
+Por outro lado, na maioria das vezes a decisão de desligar involuntariamente um colaborador é demorada. Com o passar dos anos, tanto o colaborador quanto a empresa se encontram em uma posição onde o custo de oportunidade de tomar a decisão de desligamento (seja do colaborador ou da empresa) se torna alto.
+
+Neste sentido, a tabela \@ref(tab:tabelah4) apresenta a relação entre o tempo de empresa e o status do colaborador.
+
+
+
+```{r tabelah4}
+aux$h4$df %>%
+  dplyr::group_by(turnover) %>%
+  dplyr::summarise(mean_tempo_cargo = round(mean(tempo_cargo), 1),
+                   "Distribuição" =
+                     spk_chr(
+                       tempo_cargo,
+                       type = 'box',
+                         type = 'box',
+                 tooltipFormat = '{{field:fields}} {{value}}',
+                 tooltipFormatFieldlist = c('lw', 'lq', 'med', 'uq', 'rw'),
+                 tooltipFormatFieldlistKey = c('field'),
+                 tooltipValueLookups = htmlwidgets::JS("{fields: {med: 'Mediana', lq: 'Primeiro Quartil', uq:'Terceiro Quartil', lw: 'Limite Inferior', rw: 'Limite Superior'}}"),
+                       lineColor = aux$ey_colors[2],
+                       boxLineColor =  aux$ey_colors[2],
+                       boxFillColor =  aux$ey_colors[1],
+                       whiskerColor =  aux$ey_colors[2],
+                       outlierLineColor =  aux$ey_colors[2],
+                       medianColor = aux$ey_colors[3]
+                     #)
+                   )
+                   ) %>%
+  dplyr::rename(
+    "Status (Ativo = 0; Turnover voluntário = 1)" = turnover,
+    "Média de tempo no cargo (anos)" =  mean_tempo_cargo
+  ) %>%
+  knitr::kable(format = "html",
+               escape = F,
+                align = rep('c', 2),
+                caption = "Turnover e tempo na posição"
+               ) %>%
+  kableExtra::kable_styling(full_width = F)
+
+
+
+```
+
+
+Ao consultar a tabela \@ref(tab:tabelah4) e realizar um teste estatístico, podemos afirmar que o tempo médio na posição **é estatisticamente menor** para colaboradores que se desligaram voluntariamente em comparação com colaboradores ativos (com p-valor de `r round(aux$h4$teste_wilcox$p.value)`). Isso confirma a hipótese avaliada.
+
+É possível verificar a análise realizada acima através dos gráficos disponíveis nas *tabs* abaixo:
+
+### {.tabset .tabset-fade .tabset-pills .unnumbered}
+
+#### Densidade {.unnumbered}
+
+```{r}
+aux$h4$chart_density
+```
+
+#### *Box Plot* {.unnumbered}
+
+```{r}
+aux$h4$chart_box_plot
+```
+
+
+###  {.unnumbered}
+
+
+**Como conclusão da hipótese temos:**
+
+- Colaboradores com maior tempo no cargo estão menos inclinados a pedir demissão: **validado**.
+
+
+
+### {.tabset .tabset-fade .tabset-pills .unnumbered}
+
+#### Dados Utilizados {.unnumbered}
+
+<div style="overflow-x: auto">
+```{r}
+DT::datatable(
+  aux$h4$df,
+  rownames = FALSE,
+  style = "bootstrap",
+  extensions = 'Buttons',
+  options = list(
+    language =  dt_translations("pt"),
+    pageLength = 5,
+    dom = 'lrtBip' , # Bt para usar Buttons; defatult lfrtip - f é o search, r não deve-se tirar
+    buttons = c('csv', 'excel')
+    ),
+  filter = list(position = 'top')
+) #%>%
+  # formatRound(c(3), digits = 2, interval = 3, mark = ",",
+  #   dec.mark = getOption("OutDec"))
+```
+
+</div>
+
+
+#### Gráficos {.unnumbered}
+
+```{r}
+profile_chart(aux$h4$df %>% dplyr::select(-emplid) %>% dplyr::mutate(turnover = as.factor(turnover)), ncol = 3)
+```
+
+
+### {.unnumbered}
+
+
+[Voltar para a lista de hipóteses.](#hipoteses)
+
+### H. 5 - Colaboradores que recebem menor percentual na gestão de consequências (promoção) estão mais inclinados a pedir demissão {#h5 .unnumbered}
+
+ >**Análise**: Analisar se os colaboradores nos 2 primeiros quintis dos percentuais de gestão de consequência (promoções) tem maior índice de turnover. <br />
+**Premissa**: Colaboradores com percentual de aumento dentro do primeiro e segundo quintil são considerados com menor percentual gestão de consequência.
+
+Nesta hipótese, para fins de comparação, os colaboradores que tiveram gestão de consequência no período foram **divididos em dois grupos**. Em um deles estão aqueles que receberam **menor pecentual** enquanto que no outro estão os que receberam **maior percentual**. A regra utilizada para esta divisão foi:
+
+<div style="background:#f5f5f5; padding:20px; margin: 10px;">
+
+**Menor % gestão de consequência (`r aux$h5$df %>% filter(baixa_gest_conseq ==1) %>% nrow` colaboradores):** percentual de gestão de consequência dentro dos dois primeiros quintis.
+
+**Maior % gestão de consequência (`r aux$h5$df %>% filter(alta_gest_conseq ==1) %>% nrow` colaboradores):** percentual de gestão de consequência dentro dos dois últimos quintis.
+
+</div>
+
+A partir disso, calculamos a proporção de *turnover* voluntário nos dois grupos. A tabela \@ref(tab:tabelah5) é apresentada a seguir:
+
+```{r tabelah5}
+
+aux$h5$tab_report %>%
+  dplyr::rename(" " = `Proporção`) %>% 
+  knitr::kable(format = "html",
+               escape = F,
+                align = rep('c', 4),
+                caption = "Proporção de <b>turnover</b> entre colaboradores com baixo e alto percentual de gestão de consequência"
+               ) %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T)
+
+```
+
+É possível observar pela tabela \@ref(tab:tabelah5) que a proporção de *turnover* voluntário é **superior no grupo de colaboradores que receberam menor percentual de gestão de consequência**. 
+
+Com o objetivo de verificar estatisticamente se as duas proporções realmente são diferentes, foi realizado um teste estatístico. O resultado **não confirmou** a hipótese em questão, ou seja, o **turnover voluntário não é estatisticamente diferente no grupo de colaboradores que receberam um menor percentual de gestão de consequência**, quando feita comparação com colaboradores com maior percentual (o `p-valor` do teste de diferença de proporções foi `r round(aux$h5$teste_prop$p.value, 3)`).
+
+
+**Portanto, como conclusão da hipótese temos:**
+
+- Colaboradores que recebem menor percentual na gestão de consequências (promoção) estão mais inclinados a pedir demissão: **não validado**.
+
+### {.tabset .tabset-fade .tabset-pills .unnumbered}
+
+#### Dados Utilizados {.unnumbered}
+
+<div style="overflow-x: auto">
+```{r}
+DT::datatable(
+  aux$h5$df,
+  rownames = FALSE,
+  style = "bootstrap",
+  extensions = 'Buttons',
+  options = list(
+    language =  dt_translations("pt"),
+    pageLength = 5,
+    dom = 'lrtBip' , # Bt para usar Buttons; defatult lfrtip - f é o search, r não deve-se tirar
+    buttons = c('csv', 'excel')
+    ),
+  filter = list(position = 'top')
+) %>%
+  formatRound(c(3), digits = 2, interval = 3, mark = ",",
+    dec.mark = getOption("OutDec"))
+```
+
+</div>
+
+
+#### Gráficos {.unnumbered}
+
+```{r}
+profile_chart(aux$h5$df %>% dplyr::select(-emplid) %>% dplyr::mutate(turnover = as.factor(turnover)), ncol = 2)
+```
+
+
+### {.unnumbered}
+
+[Voltar para a lista de hipóteses.](#hipoteses)
+
+### H. 6 - Colaboradores que fazem maior quantidade de horas extras tendem a pedir demissão {#h6 .unnumbered}
+
+ >**Análise**: Analisar se os colaboradores que fazem maior quantidade de horas extras são os que mais se desligam de forma voluntária da empresa. <br />
+**Premissa**: Em função dos dados hipotéticos, a análise será realizada se o colaborador teve ou não hora extra, não a quantidade praticada.
+
+A tabela \@ref(tab:tabelah6) mostra a quantidade de colaboradores que se desligaram voluntariamente e fizeram hora extra (sim) bem como os que não fizeram no período de análise. Além disso, mostra a proporção em relação aos colaboradores ativos de cada grupo. É possível observar que a proporção de *turnover* voluntário é **superior no grupo de colaboradores que fizeram hora extra** em comparação com o outro grupo.
+
+```{r tabelah6, results='asis'}
+
+# CORRETO
+# aux$h6$tab_prop %>%
+#   dplyr::select(hora_extra, count_turnover, prop) %>%
+#   dplyr::mutate(prop = round(100*prop, 2)) %>%
+#   dplyr::rename(
+#    "hora extra" = hora_extra,
+#    "qtde turnover" = count_turnover,
+#    "proporção" = prop
+#   ) %>%
+#   knitr::kable(format = "html",
+#                align = rep('c', 3),
+#                caption = "Proporção de <b>turnover</b> entre colaboradores que fazem (sim) e não fazem hora extra") %>%
+#   kable_styling(full_width = F) %>%
+#   column_spec(1, bold = T, border_right = T)
+
+aux$h6$tab_prop %>%
+  dplyr::mutate(prop = round(100*prop, 2)) %>%
+  dplyr::group_by(hora_extra) %>%
+  dplyr::summarise("Quantidade turnover" = count_turnover,
+   "Proporção de Turnover" = prop,
+                   "Proporção" = distribuicao) %>%
+dplyr::rename("hora extra" = hora_extra) %>%
+dplyr::select(`hora extra`, `Quantidade turnover`, `Proporção de Turnover`, " " = `Proporção`) %>%
+  knitr::kable(format = "html",
+               escape = F,
+                align = rep('c', 2),
+                caption = "Proporção de <b>turnover</b> entre colaboradores que fazem (sim) e não fazem hora extra"
+               ) %>%
+  kableExtra::kable_styling(full_width = F) %>%
+column_spec(1, bold = T, border_right = T)
+
+```
+
+
+Para validar se esta diferença é estatisticamente significante, foi realizado um teste estatístico. O resultado **confirmou** a hipótese em questão, ou seja, de fato o **a proporção de turnover voluntário é maior no grupo de colaboradores que fizeram hora extra** quando feita comparação com colaboradores que não fizeram hora extra no período analisado  (o `p-valor` do teste de diferença de proporções foi `r round(aux$h6$prop_test$p.value, 3)`)
+
+**Portanto, a conclusão da hipótese foi**:
+
+- Os colaboradores que fazem maior quantidade de horas extras são os que mais se desligam de forma voluntária da empresa: **validado**.
+
+### {.tabset .tabset-fade .tabset-pills .unnumbered}
+
+#### Dados Utilizados {.unnumbered}
+
+<div style="overflow-x: auto">
+```{r}
+DT::datatable(
+  aux$h6$df,
+  rownames = FALSE,
+  style = "bootstrap",
+  extensions = 'Buttons',
+  options = list(
+    language =  dt_translations("pt"),
+    pageLength = 5,
+    dom = 'lrtBip' , # Bt para usar Buttons; defatult lfrtip - f é o search, r não deve-se tirar
+    buttons = c('csv', 'excel')
+    ),
+  filter = list(position = 'top')
+) 
+```
+
+</div>
+
+
+#### Gráficos {.unnumbered}
+
+```{r}
+profile_chart(aux$h6$df %>% dplyr::select(-emplid) %>% dplyr::mutate(turnover = as.factor(turnover)), ncol = 2)
+```
+
+
+### {.unnumbered}
+
+[Voltar para a lista de hipóteses.](#hipoteses)
+
+### H. 7 - Há um maior índice de *turnover* voluntário em colaboradores cuja frequência de viagem a trabalho é maior  {#h7 .unnumbered}
+
+ >**Análise**: Analisar se os colaboradores com maior frequência de viagem são os que mais se desligam de forma voluntária da empresa. Analisar também se há diferenças entre os departamentos da empresa, pois se acredita que nos departamentos em que não há metas de vendas, o *turnover* voluntário seja proporcionalmente maior. <br />
+**Premissa**: A análise será realizada pela frequência já estabelecida na base de dados e não pela quantidade de viagens (informação não disponível). 
+
+Há uma crença na organização de que colaboradores que viajam a trabalho com maior frequência estão entre aqueles com maior índice de saída de forma voluntária, sendo que se acredita que esta proporção é ainda maior em departamentos não atrelados a vendas. Para isso, foram calculadas as proporções de saídas dos colaboradores por frequência de viagem e por departamentos. 
+
+As tabelas de \@ref(tab:tabelah7geral) à \@ref(tab:tabelah7rnd) apresentam o **agrupamento de todos os colaboradores e de cada departamento** por frequência de viagem, quantidade de *turnover* voluntário e sua proporção em relação aos colaboradores ativos de cada grupo.
+
+### {.tabset .tabset-fade .tabset-pills .unnumbered}
+
+#### Geral {.unnumbered}
+
+```{r tabelah7geral}
+aux$h7$tab_prop %>% 
+  #dplyr::select(freq_viagem, count_turnover, prop) %>% 
+  dplyr::mutate(prop = round(prop, 2)) %>% 
+  dplyr::select(
+   "Frequência viagem" = freq_viagem,
+   "Qtde turnover" = count_turnover,
+   "Total" = n,
+   "Proporção de Turnover" = prop, 
+   " " = distribuicao
+  ) %>% 
+  knitr::kable(format = "html",
+               escape = FALSE,
+               align = rep('c', 4),
+               caption = "Proporção de <b>turnover</b> por frequência de viagem") %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T)
+```
+
+#### Sales {.unnumbered}
+
+```{r tabelah7vendas}
+aux$h7$tab_prop_sales %>% 
+  dplyr::mutate(prop = round(prop, 2)) %>% 
+  dplyr::rename(
+   "frequência viagem" = freq_viagem,
+   "qtde turnover" = count_turnover,
+   "total" = n,
+   "proporção" = prop,
+      " " = distribuicao
+  ) %>% 
+  knitr::kable(format = "html",
+               escape = FALSE, 
+               align = rep('c', 3),
+               caption = "Proporção de <b>turnover</b> por frequência de viagem") %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T)
+```
+
+#### Human Resources {.unnumbered}
+
+```{r tabelah7hr}
+aux$h7$tab_prop_hr %>% 
+  dplyr::mutate(prop = round(prop, 2)) %>% 
+  dplyr::rename(
+   "frequência viagem" = freq_viagem,
+   "qtde turnover" = count_turnover,
+   "total" = n,
+   "proporção" = prop,
+      " " = distribuicao
+  ) %>% 
+  knitr::kable(format = "html",
+               escape = FALSE, 
+               align = rep('c', 3),
+               caption = "Proporção de <b>turnover</b> por frequência de viagem") %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T)
+```
+
+#### Research & Development {.unnumbered}
+
+```{r tabelah7rnd}
+aux$h7$tab_prop_rnd %>% 
+  dplyr::mutate(prop = round(prop, 2)) %>% 
+  dplyr::rename(
+   "frequência viagem" = freq_viagem,
+   "qtde turnover" = count_turnover,
+   "total" = n,
+   "proporção" = prop,
+      " " = distribuicao
+  ) %>% 
+  knitr::kable(format = "html",
+               escape = FALSE, 
+               align = rep('c', 3),
+               caption = "Proporção de <b>turnover</b> por frequência de viagem") %>%
+  kableExtra::kable_styling(full_width = F) %>%
+  column_spec(1, bold = T, border_right = T)
+```
+
+### {.unnumbered}
+
+
+
+É possível observar nas tabelas que **a proporção de *turnover* voluntário é maior quanto maior a frequência de viagens**. Além disso, ao olhar entre os departamentos, a proporção de *turnover* voluntário também é maior para os colaboradores que viajam com frequência.  Esta diferença pode ser observada no gráfico abaixo:
+
+```{r}
+aux$h7$chart_freq_viagem
+```
+
+Dessa forma, foram realizados testes estatísticos para validar se as diferenças verificadas visualmente no gráfico acima realmente refletem um padrão consistente. O resultado **confirmou** que exite uma diferença de proporção entre as frequências de viagens para colaboradores que se desligaram de forma voluntária e ativos para os colaboradores de forma geral (o `p-valor` do teste de diferença de proporções foi `r round(aux$h7$prop_test$p.value, 3)`). 
+
+Foi aplicado também um teste para verificar se a diferença das proporções segue uma tendência linear, ou seja, se quanto maior a frequência de viagens maior o *turnover* voluntário. O resultado **confirmou** que de fato o **turnover voluntário foi superior para colaboradores com maior frequência de viagem** quando feita comparação com colaboradores com menor frequência (o `p-valor` do teste foi `r round(aux$h7$prop_trend_test$p.value, 3)`).
+
+Esta mesma abordagem para verificar diferenças e tendências entre proporções foi estendida à análise segregada por **departamentos**. Os resultados são detalhados a seguir:
+
+- *Sales* (vendas): há diferença entre proporções (`p-valor` de `r round(aux$h7$prop_test_sales$p.value, 3)`); há tendência nas proporções, ou seja, quanto maior a frequência de viagem, maior o *turnover* voluntário (`r round(aux$h7$prop_trend_test_sales$p.value, 3)`)
+
+- *Research & Development*: há diferença entre proporções (`p-valor` de `r round(aux$h7$prop_test_rnd$p.value, 3)`); há tendência nas proporções, ou seja, quanto maior a frequência de viagem, maior o *turnover* voluntário (`r round(aux$h7$prop_trend_test_rnd$p.value, 3)`)
+
+- *Human Resources*: **não há** diferença estatisticamente significativa entre proporções (`p-valor` de `r round(aux$h7$prop_test_hr$p.value, 3)`); há tendência nas proporções, ou seja, porém com menor significância que nos demais departamentos (`r round(aux$h7$prop_trend_test_hr$p.value, 3)`).
+
+
+**Sendo assim, as conclusões da hipótese foram**:
+
+- Os colaboradores com maior frequência de viagem são os que mais se desligam de forma voluntária da empresa: **validado**.
+- Nos departamentos em que não há metas de vendas o *turnover* voluntário é proporcionalmente maior: **não validado**.
+
+  
+### {.tabset .tabset-fade .tabset-pills .unnumbered} 
+
+#### Dados Utilizados {.unnumbered}
+
+<div style="overflow-x: auto">
+```{r}
+DT::datatable(
+  aux$h7$df,
+  rownames = FALSE,
+  style = "bootstrap",
+  extensions = 'Buttons',
+  options = list(
+    language =  dt_translations("pt"),
+    pageLength = 5,
+    dom = 'lrtBip' , # Bt para usar Buttons; defatult lfrtip - f é o search, r não deve-se tirar
+    buttons = c('csv', 'excel')
+    ),
+  filter = list(position = 'top')
+) 
+```
+
+</div>
+
+#### Gráficos {.unnumbered}
+
+```{r}
+profile_chart(aux$h7$df %>% dplyr::select(-emplid) %>% dplyr::mutate(turnover = as.factor(turnover)), ncol = 3)
+```
+
+
+### {.unnumbered}
+
+[Voltar para a lista de hipóteses.](#hipoteses)
+
+
+<!-- ### H. 7 - Colaboradores com menor tempo na empresa, tem maior índice de *turnover* voluntário   {#h7 .unnumbered} -->
+
+<!--  >**Análise**: Analisar se os colaboradores com menor tempo na empresa são os que mais se desligam de forma voluntária da empresa. <br /> -->
+<!-- **Premissa**: A análise será realizada pelo agrupamento dos colaboradores em quintis quando agrupados por tempo na empresa  -->
+
+
+
+<!-- [Voltar para a lista de hipóteses.](#hipoteses) -->
+
+
+<!-- ### H. 8 - Colaboradores com menor quantidade de anos de experiência, tem maior índice de *turnover* voluntário   {#h8 .unnumbered} -->
+
+<!--  >**Análise**: Analisar se os colaboradores com menor quantidade de anos de experiência  são os que mais se desligam de forma voluntária da empresa. <br /> -->
+<!-- **Premissa**: A análise será realizada pelo agrupamento dos colaboradores em quintis quando agrupados por anos de experiência  -->
+
+
+
+<!-- [Voltar para a lista de hipóteses.](#hipoteses) -->
+
+<!-- ### H. 9 - Colaboradores que não tem *Stock Options* tem maior índice de *turnover* voluntário   {#h9 .unnumbered} -->
+
+<!--  >**Análise**: Analisar se os colaboradores sem *Stock Options* são os que mais se desligam de forma voluntária da empresa. <br /> -->
+<!-- **Premissa**: Colaboradores sem  *Stock Options* serão aqueles cujo valor de *Stocks* é igual a 0 (zero). -->
+
+
+
+<!-- [Voltar para a lista de hipóteses.](#hipoteses) -->
+
+# Considerações Finais
+
+Com o compartilhamento dos códigos desenvolvidos pela equipe de Data Science para o time do cliente, é importante que o projeto seja constantemente atualizado (base de dados, hipóteses e modelo preditivo). Outro ponto crucial para o sucesso do projeto é que a equipe de BP esteja alinhada com as análises e tenha disponível os resultados dos seus respectivos clientes para gerar discussões que permitam as decisões *data-driven*.
+
+
+# Apêndice
+
+Esta seção apresenta as regras de negócio usadas para as análises deste relatório e o dicionário de dados que contempla todos os dados processados e algumas informações sobre os testes estatísticos aplicados para avaliar as hipóteses em estudo. 
+
+## Regras de Negócio {#regras_negocio}
+
+As regras de negócio representam a forma pela qual a empresa toma suas decisões. Elas refletem as políticas da empresa, sendo necessário entendê-las para que *insights data driven* sejam gerados com maior assertividade. Abaixo, as principais regras de negócio do projeto adotadas neste relatório (teste de hipóteses) e no relatório de *machine learning*:
+
+* **Turnover:** o cliente calcula tal índice usando os pontos e fórmulas abaixo:
+    * colaboradores que tiverem no campo `type_action` a informação "Desligamento”;
+    * colaboradores que tiverem no campo `medida_descr` a informação "Pedido de demissão".
+
+$$
+Turnover~~Total = \frac{\frac{Admissoes~~ +~~Desligamentos}{2}}{Total~~de~~Funcionarios}
+$$
+
+$$
+Turnover~~voluntário = \frac{Desligamentos~~voluntários}{Total~~de~~Funcionarios}
+$$
+* **Proporções de *turnover* **: percentual de colaboradores que deixaram a companhia voluntariamente em relação ao total de colaboradores, excluindo os que foram desligados de forma involuntária. Esta foi a métrica utilizada para responder boa parte das hipóteses em que o objetivo era verificar diferenças estatísticas no *turnover* voluntário entre diferentes situações.
+
+$$
+Prop.~de~turnover~voluntário = \frac{Desligamentos~voluntários}{Ativos + Desligamentos~voluntários}
+$$
+
+
+
+* **Faixa de tempo na empresa:** é um agrupamento dos colaboradores por tempo na empresa, sendo classificados em:
+    * Até 1 ano;
+    * de 1 a 3 anos;
+    * de 3 a 5 anos;
+    * de 5 a 10 anos;
+    * maior que 10 anos.
+<br>  
+* **Posição na Faixa** para determinar a posição na faixa de cada colaborador, foi necessário realizar as etapas abaixo:
+    * Agrupar os colaboradores por `grade` e `cargo`;
+    * Obter a mediana do salário de cada agrupamento;
+    * Calcular o percentual do salário em relação à mediana de salário do mesmo `grade` e `cargo`.
+<br>  
+* **Escolaridade:** 
+    * Os dados de `escolaridade` estavam de forma numérica, os mesmos foram classificados conforme abaixo:
+        * 1 = "Ensino Médio";
+        * 2 = "Nível Técnico";
+        * 3 = "Nível Superior";
+        * 4 = "Mestrado";
+        * 5 = "Doutorado".
+<br>
+* **Resultado Satisfação:** 
+    * Os dados de `satisfacao_ambiente`, `satistacao_trabalho` e `satisfacao_relacoes_trabalho` estavam de forma numérica, os mesmos foram classificados conforme abaixo, dentro de suas respectivas classes:
+        * 1 = "Baixa";
+        * 2 = "Média";
+        * 3 = "Alta";
+        * 4 = "Muito alta".
+<br>
+* **Engajamento:** 
+    * Os dados de `engajamento` estavam de forma numérica, os mesmos foram classificados conforme abaixo:
+        * 1 = "Baixa";
+        * 2 = "Média";
+        * 3 = "Alta";
+        * 4 = "Muito alta".
+<br>
+* **Performance:** 
+    * Os dados de `performance` estavam de forma numérica, os mesmos foram classificados conforme abaixo:
+        * 1 = "Baixo";
+        * 2 = "Bom";
+        * 3 = "Ótimo";
+        * 4 = "Excelente".
+<br>
+* **Equilíbrio Vida pessoal e profissional:** 
+    * Os dados de `equilibrio_vida_profissional` estavam de forma numérica, os mesmos foram classificados conforme abaixo:
+        * 1 = "Baixo";
+        * 2 = "Bom";
+        * 3 = "Ótimo";
+        * 4 = "Excelente".
+<br>
+* **Quantidade de empresas trabalhadas**: é um agrupamento dos colaboradores por quantidade de empresas trabalhadas anterior a atual, sendo classificados em:
+    * Nenhuma;
+    * de 1 a 3;
+    * de 4 a 7;
+    * mais que 7.
+
+## Dicionário de Dados
+
+É um documento de texto ou planilha que centraliza informações sobre o conjunto de dados (*dataset*) que será analisado. Seu propósito é melhorar a comunicação entre todos os envolvidos no projeto na medida em que permite associar um significado a cada variável do *dataset*. Além disso, um dos benefícios do dicionário de dados é permitir relacionar variáveis em diversas tabelas do *dataset*. 
+
+O dicionário de dados utilizado no projeto será disponibilizado por e-mail para o cliente e estará disponível juntamente com o código do projeto em `/templates`.
+
+
+## Testes Estatísticos
+
+Para as análises das hipóteses apresentadas neste relatório, foram utilizados diferentes testes estatísticos. Abaixo encontra-se uma tabela com esses testes e seus detalhes:
+
+| Teste     | Testa diferenças entre | Qtde de amostras que compara | Função no R / pacote | Observações | Usado no relatório? |
+|------------------|---------------|---------------|-----------------|----------------------------|--------------|
+| [Chi-Squared](https://www.r-bloggers.com/comparison-of-two-proportions-parametric-z-test-and-non-parametric-chi-squared-methods/) | Proporções | 2 | prop.test() / Default |  |  h5; h6; h7  |
+| [Wilcoxon rank sum test (ou Mann Whitney U Test)](http://www.sthda.com/english/wiki/unpaired-two-samples-wilcoxon-test-in-r) | Distribuições | 2 | wilcox.test() / Default | Não pareado, análogo ao teste T two sample. |     h3; h4 |
+
+
+**Nota**: todos os testes acima são do tipo "não-paramétricos", ou seja, não exigem premissas acerca das distribuições dos dados. 
+
+
+As explicações dos modelos de *testes de hipótese* utilizados neste projeto estão disponíveis no documento de <a href="https://pier-shared.gitlab.io/pier_apendice/hipoteses.html"target="_blank">Apêndice</a>.
+
+
+[^1]: A base de dados utilizada neste relatório possui dados fictícios criados por cientistas de dados da IBM. A base é pública e está disponível na plataforma *Kaggle*, neste [link](https://www.kaggle.com/pavansubhasht/ibm-hr-analytics-attrition-dataset).
+

@@ -1,0 +1,10 @@
+.DS_Store
+.RData
+.Rhistory
+.Rproj.user
+.Rprofile
+.Renviron
+.Renviron.site
+.Renviron.user
+.Renviron.Renviron
+*.csv
