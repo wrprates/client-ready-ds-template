@@ -3,7 +3,18 @@
 #################################################################
 ##########################
 
+# Carrega função de load_data
+source("sources/loaddata.R")
+
+# Carrega os dados
 inicio_script <- Sys.time()
+message("Carregando dados...")
+loaded_data <- load_data()
+
+# Desempacota os objetos
+all_csvs <- loaded_data$data
+files.nome <- loaded_data$files.nome
+var_types <- loaded_data$var_types
 
 # Criando lista que irá receber objetos para irem para o relatório
 univ <- list()
@@ -27,9 +38,9 @@ message("Encontrando a quantidade de colunas e linhas em cada arquivo  ...")
 inicio <- Sys.time()
 
 univ$dimensoes <- 
-  lapply(1:length(all.csvs), function(i) {
-    Linhas <- dim(all.csvs[[i]])[1]
-    Colunas <- dim(all.csvs[[i]])[2]
+  lapply(1:length(all_csvs), function(i) {
+    Linhas <- dim(all_csvs[[i]])[1]
+    Colunas <- dim(all_csvs[[i]])[2]
      base::data.frame(arquivo = files.nome[[i]],
                linhas = Linhas,
                colunas = Colunas) %>% 
@@ -52,8 +63,8 @@ message(runtime(paste("Foram necessários",round(tempo,2), "minutos para encontr
 message("Separando as colunas de cada arquivo que são do tipo numéricas ...")
 inicio <- Sys.time()
 
-aux_univ$all.continuas <- lapply(1:length(all.csvs), function(i)
-  tryCatch(dplyr::select(all.csvs[[i]], which(sapply(all.csvs[[i]], is.numeric))),  error = function(e) NULL))
+aux_univ$all.continuas <- lapply(1:length(all_csvs), function(i)
+  tryCatch(dplyr::select(all_csvs[[i]], which(sapply(all_csvs[[i]], is.numeric))),  error = function(e) NULL))
 
 
 
@@ -95,7 +106,7 @@ aux_univ$result.numericas <- lapply(1:length(aux_univ$all.continuas), function(i
                #`75%` = round(stats::quantile(val, c(0.75), na.rm = TRUE), 2),
                #`100%` = round(stats::quantile(val, c(1), na.rm = TRUE), 2),
                media = round(mean(.$val, na.rm = TRUE), 2)#,
-               arquivo = base::ifelse(test = !is.null(interesse.path), yes = interesse.name[[i]], no = files.nome[[i]])#,
+               arquivo = files.nome[[i]]#,
                na = sum(is.na(.$val))#,
                na_perc = (na/length(.$val))*100#,
                dp = sd(.$val, na.rm = TRUE)#,
@@ -125,11 +136,11 @@ aux_univ$result.numericas <- lapply(1:length(aux_univ$all.continuas), function(i
 
 
 # renomear a lista com os nomes dos arquivos disponibilizados
-if (!is.null(interesse.path)) {
-  names(aux_univ$result.numericas) <- gsub("\\.csv$", "", interesse.name)
-} else {
+# if (!is.null(interesse.path)) {
+#   names(aux_univ$result.numericas) <- gsub("\\.csv$", "", interesse.name)
+# } else {
   names(aux_univ$result.numericas) <- gsub("\\.csv$", "", files.nome)
-}
+# }
 
 # concatenando os resultados de cada data frame
 univ$numericas <- dplyr::bind_rows(aux_univ$result.numericas)
@@ -146,7 +157,7 @@ if (is.data.frame(univ$numericas) && nrow(univ$numericas) == 0) {
 
 fim <- Sys.time()
 tempo <- (as.numeric(fim) - as.numeric(inicio))/60
-message(runtime(paste("Foram necessários",round(tempo,2), "minutos para a análise das variáveis numéricas.")))
+# message(runtime(paste("Foram necessários",round(tempo,2), "minutos para a análise das variáveis numéricas.")))
 
 #####
 ##  CATEGÓRICAS
@@ -157,10 +168,10 @@ message("Separando as colunas de cada arquivo que são do tipo categórica ...")
 inicio <- Sys.time()
 
 aux_univ$all.categoricas  <-
-  lapply(names(all.csvs),
+  lapply(names(all_csvs),
          function(x) {
            tryCatch(
-             all.csvs[[paste0(x)]] %>%  dplyr::select_if(is.character) %>% dplyr::select(-c(paste0(char[[x]]), paste0(id[[x]])))
+             all_csvs[[paste0(x)]] %>%  dplyr::select_if(is.character) %>% dplyr::select(-c(paste0(char[[x]]), paste0(id[[x]])))
              , error = function(e)
                NULL
            )
@@ -210,10 +221,10 @@ message("Separando as colunas de cada arquivo que são do tipo ID ...")
 inicio <- Sys.time()
 
 aux_univ$all.id  <-
-  lapply(names(all.csvs),
+  lapply(names(all_csvs),
          function(x) {
            tryCatch(
-             all.csvs[[paste0(x)]] %>% dplyr::select(id[[paste0(x)]]),
+             all_csvs[[paste0(x)]] %>% dplyr::select(id[[paste0(x)]]),
              error = function(e)
                NULL
            )
@@ -271,11 +282,11 @@ message("Separando as colunas de cada arquivo que são do tipo texto ...")
 inicio <- Sys.time()
 
 aux_univ$all.char  <-
-  lapply(names(all.csvs),
+  lapply(names(all_csvs),
          function(x) {
            tryCatch(
              
-             all.csvs[[paste0(x)]] %>% dplyr::select(char[[paste0(x)]])
+             all_csvs[[paste0(x)]] %>% dplyr::select(char[[paste0(x)]])
              ,
              error = function(e)
                NULL
@@ -332,8 +343,8 @@ message(runtime(paste("Foram necessários",round(tempo,2), "minutos para a anál
 # Faz um subset em cada data frame da lista separando apenas as variáveis que são datas
 message("Separando as colunas de cada arquivo que são do tipo data ...")
 inicio <- Sys.time()
-aux_univ$all.datas <- lapply(1:length(all.csvs), function(i)
-  tryCatch(dplyr::select(all.csvs[[i]], which(sapply(all.csvs[[i]], is.Date))), error = function(e) NULL))
+aux_univ$all.datas <- lapply(1:length(all_csvs), function(i)
+  tryCatch(dplyr::select(all_csvs[[i]], which(sapply(all_csvs[[i]], is.Date))), error = function(e) NULL))
 
 # Faz os cálculos de interesse para as variáveis datas
 message("Encontrando as estatísticas para as variáveis do tipo data ...")
