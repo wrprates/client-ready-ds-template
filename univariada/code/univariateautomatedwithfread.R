@@ -3,8 +3,10 @@
 #################################################################
 ##########################
 
-# Carrega função de load_data
+
+# Carrega função de load_data e functions
 source("sources/loaddata.R")
+source("sources/functions.R")
 
 # Carrega os dados
 inicio_script <- Sys.time()
@@ -15,12 +17,30 @@ loaded_data <- load_data()
 all_csvs <- loaded_data$data
 files.nome <- loaded_data$files.nome
 var_types <- loaded_data$var_types
+data_path <- loaded_data$data_path  # Importante para salvar o RDS depois
 
 # Criando lista que irá receber objetos para irem para o relatório
 univ <- list()
 
 # Criando objeto auxiliar, a ser excluída após salvar RDS 
 aux_univ <- list()
+
+# Criando objeto aux para configurações
+aux <- list(
+    box_plot_outliers = FALSE,
+    many_levels_n = 100,
+    client_colors = c("#1f77b4", "#ff7f0e", "#2ca02c")
+)
+
+# Define interesse.path como NULL (já que não estamos usando)
+interesse.path <- NULL
+interesse.name <- NULL
+
+# Primeiro, definir a função warn() no início do arquivo
+warn <- function(msg) {
+  return(paste("[WARN]", msg))
+}
+
 
 ##########################################
 ####          DIMENSOES              #####
@@ -50,7 +70,7 @@ univ$dimensoes <-
 
 fim <- Sys.time()
 tempo <- (as.numeric(fim) - as.numeric(inicio))/60
-message(runtime(paste("Foram necessários",round(tempo,2), "minutos para encontrar a quantidade de colunas e linhas do arquivo")))
+# message(runtime(paste("Foram necessários",round(tempo,2), "minutos para encontrar a quantidade de colunas e linhas do arquivo")))
 ##############################################
 ########       TIPO DE VARIÁVEL      #########
 ##############################################
@@ -167,49 +187,48 @@ tempo <- (as.numeric(fim) - as.numeric(inicio))/60
 message("Separando as colunas de cada arquivo que são do tipo categórica ...")
 inicio <- Sys.time()
 
-aux_univ$all.categoricas  <-
+aux_univ$all.categoricas <- 
   lapply(names(all_csvs),
          function(x) {
            tryCatch(
-             all_csvs[[paste0(x)]] %>%  dplyr::select_if(is.character) %>% dplyr::select(-c(paste0(char[[x]]), paste0(id[[x]])))
-             , error = function(e)
+             all_csvs[[paste0(x)]] %>% 
+               dplyr::select(var_types$fator[[paste0(x)]]) %>%
+               dplyr::select_if(function(col) is.factor(col) || is.character(col)),
+             error = function(e)
                NULL
            )
          })
 
-
 # Faz os cálculos de interesse para as variáveis categóricas
 message("Encontrando as estatísticas para as variáveis do tipo categóricas ...")
 aux_univ$result.categoricas <- 
-  lapply(1:length(aux_univ$all.categoricas), function(i)
-    tryCatch(aux_univ$all.categoricas[[i]] %>%
-               tidyr::pivot_longer(dplyr::everything(), names_to = 'var', values_to = 'value') %>%
-      #tidyr::gather(aux_univ$all.categoricas[[i]], "var", "value") %>%
-               dplyr::count(var, value) %>%
-               dplyr::mutate(prop = prop.table(n)) %>%
-               dplyr::mutate(arquivo = ifelse(!is.null(interesse.path), interesse.name[[i]], files.nome[[i]])),
-             error = function(e) NULL))
+  lapply(1:length(aux_univ$all.categoricas), function(i) {
+    aux_univ$all.categoricas[[i]] %>%
+      tidyr::pivot_longer(dplyr::everything(), names_to = 'var', values_to = 'value') %>%
+      dplyr::group_by(var) %>%
+      dplyr::count(value) %>%
+      dplyr::mutate(prop = n/sum(n)) %>%
+      dplyr::ungroup() %>%
+      dplyr::mutate(arquivo = files.nome[[i]])
+  })
 
 # renomear a lista com os nomes dos arquivos disponibilizados
-if (!is.null(interesse.path)) {
-  names(aux_univ$result.categoricas) <- gsub("\\.csv$", "", interesse.name)
-} else {
-  names(aux_univ$result.categoricas) <- gsub("\\.csv$", "", files.nome)
-}
+names(aux_univ$result.categoricas) <- gsub("\\.csv$", "", files.nome)
+
 
 # concatenando os resultados de cada data frame
 univ$categoricas <- dplyr::bind_rows(aux_univ$result.categoricas)
 
 # renomenado o data frame
-if (is.data.frame(univ$categoricas ) && nrow(univ$categoricas )==0) {
+if (is.data.frame(univ$categoricas) && nrow(univ$categoricas) == 0) {
   message(warn("Você não tem nenhuma variável declarada como categórica ou idenfificada automaticamente com este tipo. Verifique as definições em /sources/vartypes/vartypes_fread.R e force variáveis de seu interesse a terem esse tipo..."))
 } else {
-  names(univ$categoricas ) <- c("Variavel", "Fator", "N", "Proporcao", "Arquivo")
+  names(univ$categoricas) <- c("Variavel", "Fator", "N", "Proporcao", "Arquivo")
 }
 
 fim <- Sys.time()
 tempo <- (as.numeric(fim) - as.numeric(inicio))/60
-message(runtime(paste("Foram necessários",round(tempo,2), "minutos para a análise das variáveis categóricas.")))
+message(paste("Foram necessários",round(tempo,2), "minutos para a análise das variáveis categóricas."))
 
 
 #####
@@ -220,40 +239,56 @@ message(runtime(paste("Foram necessários",round(tempo,2), "minutos para a anál
 message("Separando as colunas de cada arquivo que são do tipo ID ...")
 inicio <- Sys.time()
 
-aux_univ$all.id  <-
+aux_univ$all.id <- 
   lapply(names(all_csvs),
          function(x) {
-           tryCatch(
-             all_csvs[[paste0(x)]] %>% dplyr::select(id[[paste0(x)]]),
-             error = function(e)
+           # Debug: imprimir informações
+           print(paste("Processando arquivo:", x))
+           print(paste("Colunas ID:", paste(var_types$id[[x]], collapse=", ")))
+           print(paste("Colunas disponíveis:", paste(names(all_csvs[[x]]), collapse=", ")))
+           
+           tryCatch({
+             # Pegando todas as colunas ID definidas em var_types$id
+             id_cols <- var_types$id[[x]]
+             df <- all_csvs[[x]]
+             
+             # Verificar se as colunas existem
+             missing_cols <- setdiff(id_cols, names(df))
+             if(length(missing_cols) > 0) {
+               warning(paste("Colunas não encontradas:", paste(missing_cols, collapse=", ")))
+             }
+             
+             # Selecionar apenas as colunas que existem
+             existing_cols <- intersect(id_cols, names(df))
+             if(length(existing_cols) > 0) {
+               df %>% dplyr::select(all_of(existing_cols))
+             } else {
                NULL
-           )
+             }
+           }, error = function(e) {
+               message(paste("Erro ao processar IDs do arquivo", x, ":", e$message))
+               NULL
+           })
          })
 
-
-# Faz os cálculos de interesse para as variáveis categóricas
+# Faz os cálculos de interesse para as variáveis ID
 message("Encontrando as estatísticas para as variáveis do tipo ID ...")
 aux_univ$result.id <- 
   lapply(1:length(aux_univ$all.id), function(i)
     tryCatch(aux_univ$all.id[[i]] %>%
-               tidyr::pivot_longer(dplyr::everything(), names_to = "var",  values_to = "val") %>% 
+               tidyr::pivot_longer(dplyr::everything(), names_to = "var", values_to = "val") %>% 
                dplyr::group_by(var) %>% 
-               dplyr::distinct() %>% 
-               dplyr::summarise(n = dplyr::n(),
-                                faltantes = sum(is.na(char)), .groups = 'drop'
-                                #                  distinct = unique(val)
+               dplyr::summarise(
+                 n = dplyr::n_distinct(val),
+                 faltantes = sum(is.na(val))
                ) %>% 
-               dplyr::mutate(arquivo = ifelse(!is.null(interesse.path), interesse.name[[i]], files.nome[[i]])) %>% 
+               dplyr::mutate(arquivo = files.nome[[i]]) %>% 
                dplyr::left_join(univ$dimensoes %>% dplyr::select(arquivo, linhas), by = "arquivo") %>% 
-               dplyr::mutate(prop_falt = round(100*faltantes / linhas, 2)) 
-             ,error = function(e) NULL)) 
+               dplyr::mutate(prop_falt = round(100*faltantes / linhas, 2)),
+             error = function(e) NULL))
 
 # renomear a lista com os nomes dos arquivos disponibilizados
-if (!is.null(interesse.path)) {
-  names(aux_univ$result.id) <- gsub("\\.csv$", "", interesse.name)
-} else {
-  names(aux_univ$result.id) <- gsub("\\.csv$", "", files.nome)
-}
+names(aux_univ$result.id) <- gsub("\\.csv$", "", files.nome)
 
 univ$id <-
   aux_univ$result.id  %>%
@@ -281,13 +316,11 @@ message(runtime(paste("Foram necessários",round(tempo,2), "minutos para a anál
 message("Separando as colunas de cada arquivo que são do tipo texto ...")
 inicio <- Sys.time()
 
-aux_univ$all.char  <-
+aux_univ$all.char <- 
   lapply(names(all_csvs),
          function(x) {
            tryCatch(
-             
-             all_csvs[[paste0(x)]] %>% dplyr::select(char[[paste0(x)]])
-             ,
+             all_csvs[[paste0(x)]] %>% dplyr::select(var_types$char[[paste0(x)]]),
              error = function(e)
                NULL
            )
@@ -343,8 +376,15 @@ message(runtime(paste("Foram necessários",round(tempo,2), "minutos para a anál
 # Faz um subset em cada data frame da lista separando apenas as variáveis que são datas
 message("Separando as colunas de cada arquivo que são do tipo data ...")
 inicio <- Sys.time()
-aux_univ$all.datas <- lapply(1:length(all_csvs), function(i)
-  tryCatch(dplyr::select(all_csvs[[i]], which(sapply(all_csvs[[i]], is.Date))), error = function(e) NULL))
+aux_univ$all.datas <- 
+  lapply(names(all_csvs),
+         function(x) {
+           tryCatch(
+             all_csvs[[paste0(x)]] %>% dplyr::select(var_types$dates[[paste0(x)]]),
+             error = function(e)
+               NULL
+           )
+         })
 
 # Faz os cálculos de interesse para as variáveis datas
 message("Encontrando as estatísticas para as variáveis do tipo data ...")
@@ -383,7 +423,7 @@ if (is.data.frame(univ$datas) && nrow(univ$datas)==0) {
 
 fim <- Sys.time()
 tempo <- (as.numeric(fim) - as.numeric(inicio))/60
-message(runtime(paste("Foram necessários",round(tempo,2), "minutos para a análise das variáveis em formato de data.")))
+message(paste("Foram necessários",round(tempo,2), "minutos para a análise das variáveis em formato de data."))
 
 
 ##############################################

@@ -11,7 +11,7 @@ load_data <- function(project_root = ".") {
   var_types <- list(
     # Identificadores
     id = list(
-      employee_attrition = c("EmployeeNumber", "DepartmentId")
+      employee_attrition = c("EmployeeNumber")
     ),
     
     # Variáveis categóricas
