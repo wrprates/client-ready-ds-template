@@ -490,8 +490,6 @@ aux$many_levels_cols <-
      dplyr::select(Variavel) %>% 
      dplyr::distinct())$Variavel
 
-
-
 aux_univ$cat.hist.list <-
   aux_univ$all.categoricas %>% 
   # Retirando dos gráficos colunas com muitos níveis
